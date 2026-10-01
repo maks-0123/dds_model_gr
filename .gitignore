@@ -1,0 +1,12 @@
+obj_dir/
+*.dylib
+*.vcd
+sim
+env/
+__pycache__/
+*.pyc
+gr-verilog/
+dds.py
+run.py
+dds_epy_block_0*.py
+default_epy_block_0.py
