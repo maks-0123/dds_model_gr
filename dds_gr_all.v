@@ -1,19 +1,27 @@
-module dds_gr(
+module dds_gr #(parameter TEST_MODE = 1)(
     input         clock,
     input         reset,
-    input  [31:0] io_in,     
+    input  [31:0] io_in,    
     output [31:0] io_out
-    );
+);
     wire signed [15:0] dac, held, filt;
 
-    dds_mod #(.N(48), .AW(14), .DW(16), .FM_SHIFT(25)) u0 (
-        .clk(clock), .rst(reset),
-        .ftw(48'h080000000000),      // 1 кГц при samp_rate = 32 кГц
-        .fm_in(io_in), .pm_in(16'd0), .am_in(16'hFFFF),
-        .dac_out(dac));
+    generate 
+        if (TEST_MODE == 0) begin : normal_dds
+            dds_mod #(.N(48), .AW(14), .DW(16), .FM_SHIFT(25)) u0 (
+            .clk(clock), .rst(reset),
+            .ftw(48'h080000000000),      
+            .fm_in(io_in), .pm_in(16'd0), .am_in(16'hFFFF),
+            .dac_out(dac));
+        end else begin : dac_test
+            assign dac = io_in[15:0]; 
+        end
+    endgenerate
 
-    deglitch #(16) u1 (.clk(clock), .strobe(1'b1), .din(dac), .dout(held));
-    lpf #(16, 1)   u2 (.clk(clock), .rst(reset), .din(held), .dout(filt));
+    deglitch #(16) u1
+        (.clk(clock), .strobe(1'b1), .din(dac), .dout(held));
+    lpf #(16, 1)   u2 
+        (.clk(clock), .rst(reset), .din(held), .dout(filt));
 
     assign io_out = {{16{filt[15]}}, filt};
 endmodule
@@ -29,7 +37,7 @@ module dds_mod #(parameter N = 48, AW = 14, DW = 16, FM_SHIFT = 8) (
 
     // FM: расширяем знак до N бит, затем сдвигаем на FM_SHIFT
     wire signed [N-1:0] fm_in_x = {{(N-32){fm_in[31]}}, fm_in};
-    wire signed [N-1:0] fm_ext  = $signed(fm_in_x) <<< FM_SHIFT;
+    wire signed [N-1:0] fm_ext  = fm_in_x <<< FM_SHIFT;
     wire        [N-1:0] ftw_eff = ftw + fm_ext;
 
     // фазовый аккумулятор
@@ -53,7 +61,6 @@ module dds_mod #(parameter N = 48, AW = 14, DW = 16, FM_SHIFT = 8) (
         if (rst) dac_out <= 0;
         else     dac_out <= am_out;
 endmodule
-
 module sine_mem#(parameter AW = 14, DW = 16) ( 
     input clk,
     input [AW-1:0] addr,
@@ -63,7 +70,6 @@ module sine_mem#(parameter AW = 14, DW = 16) (
     initial $readmemh("/Users/maksimromanuta/Documents/work_on_etalon/icarus_DDS/sine.hex", rom);
     always @(posedge clk) data <= rom[addr];
 endmodule
-
 module deglitch #(parameter DW = 16) (
     input                     clk,
     input                     strobe,
@@ -73,7 +79,6 @@ module deglitch #(parameter DW = 16) (
     always @(posedge clk)
         if (strobe) dout <= din;
 endmodule
-
 module lpf #(parameter DW = 16, K = 4) (
     input                  clk,
     input                  rst,

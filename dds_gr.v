@@ -1,4 +1,4 @@
-module dds_gr(
+module dds_gr #(parameter TEST_MODE = 1)(
     input         clock,
     input         reset,
     input  [31:0] io_in,    
@@ -6,11 +6,17 @@ module dds_gr(
 );
     wire signed [15:0] dac, held, filt;
 
-    dds_mod #(.N(48), .AW(14), .DW(16), .FM_SHIFT(25)) u0 (
-    .clk(clock), .rst(reset),
-    .ftw(48'h080000000000),      
-    .fm_in(io_in), .pm_in(16'd0), .am_in(16'hFFFF),
-    .dac_out(dac));
+    generate 
+        if (TEST_MODE == 0) begin : normal_dds
+            dds_mod #(.N(48), .AW(14), .DW(16), .FM_SHIFT(25)) u0 (
+            .clk(clock), .rst(reset),
+            .ftw(48'h080000000000),      
+            .fm_in(io_in), .pm_in(16'd0), .am_in(16'hFFFF),
+            .dac_out(dac));
+        end else begin : dac_test
+            assign dac = io_in[15:0]; 
+        end
+    endgenerate
 
     deglitch #(16) u1
         (.clk(clock), .strobe(1'b1), .din(dac), .dout(held));
