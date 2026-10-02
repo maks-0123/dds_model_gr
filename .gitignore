@@ -10,3 +10,5 @@ dds.py
 run.py
 dds_epy_block_0*.py
 default_epy_block_0.py
+obj_dir_dds/
+obj_dir_dactest/
