@@ -1,3 +1,5 @@
+//cargo run -- --file f32_IMD3.bin --f1 2600 --f2 3700
+
 use clap::Parser;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::fs::File;
