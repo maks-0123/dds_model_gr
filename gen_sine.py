@@ -1,5 +1,5 @@
 import math 
-AW, DW = 14, 16
+AW, DW = 16, 16
 with open("sine.hex", "w") as f:
     for i in range(1 << AW):
         v = round((2**(DW-1) - 1) * math.sin(2*math.pi * i / (1 << AW)))

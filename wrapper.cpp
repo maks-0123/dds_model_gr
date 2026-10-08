@@ -21,6 +21,7 @@ void dds_init() {
 }
 
 void dds_run(const int32_t* in, int32_t* out, int n) {
+    
     for (int i = 0; i < n; i++) {
         top->io_in = (uint32_t)in[i];
         tick();
