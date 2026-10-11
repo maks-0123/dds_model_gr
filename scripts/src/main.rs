@@ -1,131 +1,113 @@
+// Coherent SFDR / HD2 / HD3 (one tone) and IMD3 (two tones) of a DDS/DAC record.
+// Cross-check of sfdr.py: same method, same numbers.
+//
+//   cargo run --release -- --file run.bin --m 2457                 # single tone
+//   cargo run --release -- --file run.bin --m 2455 --m2 2457       # two tones -> IMD3
+//
+// Tones must sit on FFT bins (M odd, NFFT = 2^LOG2N) -> rectangular window, no leakage.
+// fOUT = M / NFFT * fDAC.  Levels in dBFS relative to 2^bits (DW-1+FRAC = 19), spurs in dBc.
+
 use clap::Parser;
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::fs::File;
-use std::io::{BufReader, Read};
+use std::fs;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     #[arg(short, long)]
     file: String,
-
-    #[arg(long, default_value_t = 32000.0)]
-    fs: f64,
-
+    /// bin of tone 1 (odd)
     #[arg(long)]
-    f1: f64,
-
+    m: usize,
+    /// bin of tone 2 -> two-tone IMD3
     #[arg(long)]
-    f2: f64,
-
-    #[arg(long, default_value_t = 5)]
-    tol_bins: usize,
+    m2: Option<usize>,
+    /// full scale = 2^bits
+    #[arg(long, default_value_t = 19)]
+    bits: u32,
+    /// int32 (File Sink sizeof_int) or float32
+    #[arg(long, default_value = "int32")]
+    dtype: String,
+    #[arg(long, default_value_t = 1000)]
+    skip: usize,
+    #[arg(long, default_value_t = 32768)]
+    nfft: usize,
+    /// MHz, only for labels
+    #[arg(long, default_value_t = 12000.0)]
+    fdac: f64,
 }
 
-fn read_f32_file(path: &str) -> std::io::Result<Vec<f32>> {
-    let f = File::open(path)?;
-    let mut reader = BufReader::new(f);
-    let mut buf = Vec::new();
-    reader.read_to_end(&mut buf)?;
-
-    let n = buf.len() / 4;
-    let mut samples = Vec::with_capacity(n);
-    for chunk in buf.chunks_exact(4) {
-        let bytes: [u8; 4] = chunk.try_into().unwrap();
-        samples.push(f32::from_le_bytes(bytes));
-    }
-    Ok(samples)
-}
-
-fn blackman_window(n: usize) -> Vec<f64> {
-    (0..n)
-        .map(|i| {
-            let x = i as f64 / (n - 1) as f64;
-            0.42 - 0.5 * (2.0 * std::f64::consts::PI * x).cos()
-                + 0.08 * (4.0 * std::f64::consts::PI * x).cos()
+fn read(path: &str, dtype: &str) -> Vec<f64> {
+    let b = fs::read(path).unwrap_or_else(|e| panic!("cannot read {path}: {e}"));
+    b.chunks_exact(4)
+        .map(|c| {
+            let a: [u8; 4] = c.try_into().unwrap();
+            match dtype {
+                "int32" => i32::from_le_bytes(a) as f64,
+                "float32" => f32::from_le_bytes(a) as f64,
+                _ => panic!("dtype must be int32 or float32"),
+            }
         })
         .collect()
 }
 
-fn peak_near(mag_db: &[f64], freqs: &[f64], target: f64, tol_bins: usize) -> (f64, f64) {
-    let center = freqs
-        .iter()
-        .enumerate()
-        .min_by(|a, b| {
-            (a.1 - target)
-                .abs()
-                .partial_cmp(&(b.1 - target).abs())
-                .unwrap()
-        })
-        .map(|(i, _)| i)
-        .unwrap_or(0);
-
-    let lo = center.saturating_sub(tol_bins);
-    let hi = (center + tol_bins).min(mag_db.len() - 1);
-
-    let (best_idx, best_val) = (lo..=hi)
-        .map(|i| (i, mag_db[i]))
-        .fold((lo, mag_db[lo]), |acc, cur| if cur.1 > acc.1 { cur } else { acc });
-
-    (freqs[best_idx], best_val)
+fn fold(b: i64, n: i64) -> usize {
+    let b = b.rem_euclid(n);
+    (if b > n / 2 { n - b } else { b }) as usize
 }
 
 fn main() {
-    let args = Args::parse();
-
-    let samples = read_f32_file(&args.file).expect("не удалось прочитать файл");
-    let n = samples.len();
-    if n == 0 {
-        eprintln!("Файл пуст");
+    let a = Args::parse();
+    let x = read(&a.file, &a.dtype);
+    if x.len() < a.skip + a.nfft {
+        eprintln!("{}: {} samples, need {}", a.file, x.len(), a.skip + a.nfft);
         std::process::exit(1);
     }
+    let n = a.nfft;
+    let fs_amp = 2f64.powi(a.bits as i32);
 
-    println!("Прочитано отсчётов: {}", n);
-
-    let window = blackman_window(n);
-    let mut buffer: Vec<Complex<f64>> = samples
-        .iter()
-        .zip(window.iter())
-        .map(|(&s, &w)| Complex::new(s as f64 * w, 0.0))
+    let mut buf: Vec<Complex<f64>> =
+        x[a.skip..a.skip + n].iter().map(|&v| Complex::new(v, 0.0)).collect();
+    FftPlanner::<f64>::new().plan_fft_forward(n).process(&mut buf);
+    let d: Vec<f64> = (0..=n / 2)
+        .map(|k| {
+            let mut amp = buf[k].norm() / (n as f64 / 2.0);
+            if k == 0 { amp /= 2.0; }
+            20.0 * (amp / fs_amp).max(1e-20).log10()
+        })
         .collect();
 
-    let mut planner = FftPlanner::<f64>::new();
-    let fft = planner.plan_fft_forward(n);
-    fft.process(&mut buffer);
+    let ni = n as i64;
+    let m1 = a.m as i64;
+    let worst = |exclude: &[usize]| -> (usize, f64) {
+        (1..d.len())
+            .filter(|k| !exclude.contains(k))
+            .map(|k| (k, d[k]))
+            .fold((0, f64::NEG_INFINITY), |acc, c| if c.1 > acc.1 { c } else { acc })
+    };
 
-    let half = n / 2;
-    let mag_db: Vec<f64> = buffer[..half]
-        .iter()
-        .map(|c| 20.0 * (c.norm() + 1e-12).log10())
-        .collect();
-    let freqs: Vec<f64> = (0..half).map(|i| i as f64 * args.fs / n as f64).collect();
-
-    let (f1_meas, p1) = peak_near(&mag_db, &freqs, args.f1, args.tol_bins);
-    let (f2_meas, p2) = peak_near(&mag_db, &freqs, args.f2, args.tol_bins);
-
-    let imd3_lo_target = 2.0 * args.f1 - args.f2; //нижний продукт интермодуляции
-    let imd3_hi_target = 2.0 * args.f2 - args.f1; //верхний продукт интремодуляции
-    
-    let (f_imd3_lo, p_imd3_lo) = peak_near(&mag_db, &freqs, imd3_lo_target, args.tol_bins);
-    let (f_imd3_hi, p_imd3_hi) = peak_near(&mag_db, &freqs, imd3_hi_target, args.tol_bins);
-
-    let ref_level = p1.max(p2);
-
-    println!("--- Основные тона ---");
-    println!("f1: цель {:.1} Гц, найден {:.1} Гц, {:.2} дБ", args.f1, f1_meas, p1);
-    println!("f2: цель {:.1} Гц, найден {:.1} Гц, {:.2} дБ", args.f2, f2_meas, p2);
-
-    println!("--- IMD3 ---");
-    println!(
-        "2f1-f2: цель {:.1} Гц, найден {:.1} Гц, {:.2} дБ ({:.2} дБс)",
-        imd3_lo_target, f_imd3_lo, p_imd3_lo, p_imd3_lo - ref_level
-    );
-    println!(
-        "2f2-f1: цель {:.1} Гц, найден {:.1} Гц, {:.2} дБ ({:.2} дБс)",
-        imd3_hi_target, f_imd3_hi, p_imd3_hi, p_imd3_hi - ref_level
-    );
-
-    let worst = (p_imd3_lo - ref_level).max(p_imd3_hi - ref_level);
-    println!("--- Итог ---");
-    println!("IMD3 (худший случай): {:.2} дБс", worst);
+    match a.m2 {
+        None => {
+            if a.m % 2 == 0 { println!("WARNING: M = {} is even", a.m); }
+            let c = d[a.m];
+            let (sb, sv) = worst(&[a.m]);
+            println!("single tone M={} fOUT={:.1} MHz", a.m, a.m as f64 / n as f64 * a.fdac);
+            println!("carrier {:.2} dBFS | SFDR {:.2} dBc (bin {})", c, c - sv, sb);
+            for k in 2..=5 {
+                println!("  HD{} {:+.2} dBc", k, d[fold(k * m1, ni)] - c);
+            }
+        }
+        Some(m2) => {
+            let m2i = m2 as i64;
+            let r = d[a.m].max(d[m2]);
+            let lo = d[fold(2 * m1 - m2i, ni)] - r;
+            let hi = d[fold(2 * m2i - m1, ni)] - r;
+            let (sb, sv) = worst(&[a.m, m2]);
+            println!("two tones M1={} M2={} fc={:.1} MHz spacing {:.3} MHz", a.m, m2,
+                     (a.m + m2) as f64 / 2.0 / n as f64 * a.fdac, (m2 - a.m) as f64 / n as f64 * a.fdac);
+            println!("tones {:.2} / {:.2} dBFS", d[a.m], d[m2]);
+            println!("IMD3 2f1-f2 {:+.2} dBc | 2f2-f1 {:+.2} dBc | worst {:+.2} dBc", lo, hi, lo.max(hi));
+            println!("worst spur excluding tones {:.2} dBc below, bin {}", r - sv, sb);
+        }
+    }
 }

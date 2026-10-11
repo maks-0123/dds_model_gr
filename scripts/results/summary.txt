@@ -1,0 +1,161 @@
+--- AW=10 DW=10 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW10_DW10_M2453.bin              2453   2395.508     60.18             30.8
+f_AW10_DW10_M2455.bin              2455   2397.461     60.18             30.8
+f_AW10_DW10_M2457.bin              2457   2399.414     60.18             30.8
+f_AW10_DW10_M2459.bin              2459   2401.367     60.18             30.8
+f_AW10_DW10_M2461.bin              2461   2403.320     60.18             30.8
+
+DW=10: mean 60.18 | min 60.18 | max 60.18 dBc  (5 runs)
+--- AW=10 DW=12 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW10_DW12_M2453.bin              2453   2395.508     60.18             33.7
+f_AW10_DW12_M2455.bin              2455   2397.461     60.18             33.7
+f_AW10_DW12_M2457.bin              2457   2399.414     60.18             33.7
+f_AW10_DW12_M2459.bin              2459   2401.367     60.18             33.7
+f_AW10_DW12_M2461.bin              2461   2403.320     60.18             33.7
+
+DW=12: mean 60.18 | min 60.18 | max 60.18 dBc  (5 runs)
+--- AW=10 DW=14 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW10_DW14_M2453.bin              2453   2395.508     60.18             34.0
+f_AW10_DW14_M2455.bin              2455   2397.461     60.18             34.0
+f_AW10_DW14_M2457.bin              2457   2399.414     60.18             34.0
+f_AW10_DW14_M2459.bin              2459   2401.367     60.18             34.0
+f_AW10_DW14_M2461.bin              2461   2403.320     60.18             34.0
+
+DW=14: mean 60.18 | min 60.18 | max 60.18 dBc  (5 runs)
+--- AW=10 DW=16 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW10_DW16_M2453.bin              2453   2395.508     60.18             34.0
+f_AW10_DW16_M2455.bin              2455   2397.461     60.18             34.0
+f_AW10_DW16_M2457.bin              2457   2399.414     60.18             34.0
+f_AW10_DW16_M2459.bin              2459   2401.367     60.18             34.0
+f_AW10_DW16_M2461.bin              2461   2403.320     60.18             34.0
+
+DW=16: mean 60.18 | min 60.18 | max 60.18 dBc  (5 runs)
+--- AW=12 DW=10 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW12_DW10_M2453.bin              2453   2395.508     72.02             21.8
+f_AW12_DW10_M2455.bin              2455   2397.461     72.02             21.8
+f_AW12_DW10_M2457.bin              2457   2399.414     72.02             21.8
+f_AW12_DW10_M2459.bin              2459   2401.367     72.02             21.8
+f_AW12_DW10_M2461.bin              2461   2403.320     72.02             21.8
+
+DW=10: mean 72.02 | min 72.02 | max 72.02 dBc  (5 runs)
+--- AW=12 DW=12 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW12_DW12_M2453.bin              2453   2395.508     72.02             31.2
+f_AW12_DW12_M2455.bin              2455   2397.461     72.02             31.2
+f_AW12_DW12_M2457.bin              2457   2399.414     72.02             31.2
+f_AW12_DW12_M2459.bin              2459   2401.367     72.02             31.2
+f_AW12_DW12_M2461.bin              2461   2403.320     72.02             31.2
+
+DW=12: mean 72.02 | min 72.02 | max 72.02 dBc  (5 runs)
+--- AW=12 DW=14 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW12_DW14_M2453.bin              2453   2395.508     72.02             34.0
+f_AW12_DW14_M2455.bin              2455   2397.461     72.02             34.0
+f_AW12_DW14_M2457.bin              2457   2399.414     72.02             34.0
+f_AW12_DW14_M2459.bin              2459   2401.367     72.02             34.0
+f_AW12_DW14_M2461.bin              2461   2403.320     72.02             34.0
+
+DW=14: mean 72.02 | min 72.02 | max 72.02 dBc  (5 runs)
+--- AW=12 DW=16 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW12_DW16_M2453.bin              2453   2395.508     72.02             34.2
+f_AW12_DW16_M2455.bin              2455   2397.461     72.02             34.2
+f_AW12_DW16_M2457.bin              2457   2399.414     72.02             34.2
+f_AW12_DW16_M2459.bin              2459   2401.367     72.02             34.2
+f_AW12_DW16_M2461.bin              2461   2403.320     72.02             34.2
+
+DW=16: mean 72.02 | min 72.02 | max 72.02 dBc  (5 runs)
+--- AW=14 DW=10 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW14_DW10_M2453.bin              2453   2395.508     75.06             18.9
+f_AW14_DW10_M2455.bin              2455   2397.461     75.06             18.9
+f_AW14_DW10_M2457.bin              2457   2399.414     75.06             18.9
+f_AW14_DW10_M2459.bin              2459   2401.367     75.06             18.9
+f_AW14_DW10_M2461.bin              2461   2403.320     75.06             18.9
+
+DW=10: mean 75.06 | min 75.06 | max 75.06 dBc  (5 runs)
+--- AW=14 DW=12 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW14_DW12_M2453.bin              2453   2395.508     80.37             25.6
+f_AW14_DW12_M2455.bin              2455   2397.461     80.37             25.6
+f_AW14_DW12_M2457.bin              2457   2399.414     80.37             25.6
+f_AW14_DW12_M2459.bin              2459   2401.367     80.37             25.6
+f_AW14_DW12_M2461.bin              2461   2403.320     80.37             25.6
+
+DW=12: mean 80.37 | min 80.37 | max 80.37 dBc  (5 runs)
+--- AW=14 DW=14 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW14_DW14_M2453.bin              2453   2395.508     80.37             35.4
+f_AW14_DW14_M2455.bin              2455   2397.461     80.37             35.4
+f_AW14_DW14_M2457.bin              2457   2399.414     80.37             35.4
+f_AW14_DW14_M2459.bin              2459   2401.367     80.37             35.4
+f_AW14_DW14_M2461.bin              2461   2403.320     80.37             35.4
+
+DW=14: mean 80.37 | min 80.37 | max 80.37 dBc  (5 runs)
+--- AW=14 DW=16 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW14_DW16_M2453.bin              2453   2395.508     80.37             38.8
+f_AW14_DW16_M2455.bin              2455   2397.461     80.37             38.8
+f_AW14_DW16_M2457.bin              2457   2399.414     80.37             38.8
+f_AW14_DW16_M2459.bin              2459   2401.367     80.37             38.8
+f_AW14_DW16_M2461.bin              2461   2403.320     80.37             38.8
+
+DW=16: mean 80.37 | min 80.37 | max 80.37 dBc  (5 runs)
+--- AW=16 DW=10 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW16_DW10_M2453.bin              2453   2395.508     75.03             19.0
+f_AW16_DW10_M2455.bin              2455   2397.461     75.03             19.0
+f_AW16_DW10_M2457.bin              2457   2399.414     75.03             19.0
+f_AW16_DW10_M2459.bin              2459   2401.367     75.03             19.0
+f_AW16_DW10_M2461.bin              2461   2403.320     75.03             19.0
+
+DW=10: mean 75.03 | min 75.03 | max 75.03 dBc  (5 runs)
+--- AW=16 DW=12 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW16_DW12_M2453.bin              2453   2395.508     90.55             15.6
+f_AW16_DW12_M2455.bin              2455   2397.461     90.55             15.6
+f_AW16_DW12_M2457.bin              2457   2399.414     90.55             15.6
+f_AW16_DW12_M2459.bin              2459   2401.367     90.55             15.6
+f_AW16_DW12_M2461.bin              2461   2403.320     90.55             15.6
+
+DW=12: mean 90.55 | min 90.55 | max 90.55 dBc  (5 runs)
+--- AW=16 DW=14 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW16_DW14_M2453.bin              2453   2395.508    104.61             13.6
+f_AW16_DW14_M2455.bin              2455   2397.461    104.61             13.6
+f_AW16_DW14_M2457.bin              2457   2399.414    104.61             13.6
+f_AW16_DW14_M2459.bin              2459   2401.367    104.61             13.6
+f_AW16_DW14_M2461.bin              2461   2403.320    104.61             13.6
+
+DW=14: mean 104.61 | min 104.61 | max 104.61 dBc  (5 runs)
+--- AW=16 DW=16 ---
+
+file                                  M      F0,Hz  SFDR,dBc   spur >floor,dB
+f_AW16_DW16_M2453.bin              2453   2395.508    119.07             11.2
+f_AW16_DW16_M2455.bin              2455   2397.461    119.07             11.2
+f_AW16_DW16_M2457.bin              2457   2399.414    119.07             11.2
+f_AW16_DW16_M2459.bin              2459   2401.367    119.07   near      11.2
+f_AW16_DW16_M2461.bin              2461   2403.320    119.07             11.2
+
+DW=16: mean 119.07 | min 119.07 | max 119.07 dBc  (5 runs)
+

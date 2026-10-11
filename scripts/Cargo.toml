@@ -1,8 +1,8 @@
 [package]
-name = "imd3_calc"
-version = "0.1.0"
-edition = "2024"
+name = "dds_measure"
+version = "0.2.0"
+edition = "2021"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 rustfft = "6"
-clap = {version = "4", features = ['derive']}
