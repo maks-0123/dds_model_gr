@@ -69,13 +69,24 @@ def measure_tone(x, bits, m, label="", verbose=False):
     sp[0] = -np.inf                     # DC (bow INL adds a DC offset, not a spur)
     sp[m] = -np.inf
     s = int(np.argmax(sp))
+    p =  10**(np.array(d)/10)
+    mask = np.ones(len(p), dtype=bool)
+    mask[0] = False
+    mask[m] = False
+    for h in harm.keys():
+        mask[h] = False
+    noise = p[mask].sum()
+    snr_dB = 10*np.log10(p[m]/noise)
+    nsd_dbc_hz = -snr_dB - 10*np.log10(FDAC_MHZ * 1e6 / 2)
+
     res = dict(tones=1, m1=m, m2="", fout_mhz=m / n * FDAC_MHZ, carrier_dbfs=car,
-               sfdr_dbc=car - sp[s], spur_bin=s, spur_label=f"HD{harm[s]}" if s in harm else "",
-               hd2_dbc=d[fold(2 * m, n)] - car, hd3_dbc=d[fold(3 * m, n)] - car,
-               imd3_lo_dbc="", imd3_hi_dbc="", imd3_dbc="")
+                sfdr_dbc=car - sp[s], spur_bin=s, spur_label=f"HD{harm[s]}" if s in harm else "",
+                hd2_dbc=d[fold(2 * m, n)] - car, hd3_dbc=d[fold(3 * m, n)] - car,
+                imd3_lo_dbc="", imd3_hi_dbc="", imd3_dbc="", snr_dB=snr_dB, nsd_dbc_hz=nsd_dbc_hz)
     if verbose:
         print(f"== {label}  single tone  M={m}  fOUT={res['fout_mhz']:.1f} MHz @ {FDAC_MHZ:.0f} MSPS")
-        print(f"carrier {car:.2f} dBFS | SFDR {res['sfdr_dbc']:.2f} dBc (bin {s} {res['spur_label']})")
+
+        print(f"carrier {car:.2f} dBFS | SFDR {res['sfdr_dbc']:.2f} dBc (bin {s} {res['spur_label']}) SNR {res['snr_dB']:.2f} dB | NSD {res['nsd_dbc_hz']:.2f} dBc/Hz")
         for hb, k in sorted(harm.items(), key=lambda t: t[1]):
             print(f"  HD{k:<2d} bin {hb:6d}  {d[hb] - car:+8.2f} dBc")
         _top(sp, car, lambda b: f"HD{harm[b]}" if b in harm else "")
@@ -96,6 +107,7 @@ def measure_two(x, bits, m1, m2, label="", verbose=False):
     sp[0] = -np.inf
     sp[m1] = sp[m2] = -np.inf
     s = int(np.argmax(sp))
+
     res = dict(tones=2, m1=m1, m2=m2, fout_mhz=(m1 + m2) / 2 / n * FDAC_MHZ, carrier_dbfs=ref,
                sfdr_dbc=ref - sp[s], spur_bin=s, spur_label=names.get(s, ""),
                hd2_dbc="", hd3_dbc="",
@@ -120,7 +132,7 @@ def _top(sp, ref, lab):
 
 
 FIELDS = ["tag", "tones", "m1", "m2", "fout_mhz", "carrier_dbfs", "sfdr_dbc", "spur_bin", "spur_label",
-          "hd2_dbc", "hd3_dbc", "imd3_lo_dbc", "imd3_hi_dbc", "imd3_dbc", "file"]
+        "hd2_dbc", "hd3_dbc", "imd3_lo_dbc", "imd3_hi_dbc", "imd3_dbc", "snr_dB", "nsd_dbc_hz", "file"]
 
 
 def append_csv(path, row):

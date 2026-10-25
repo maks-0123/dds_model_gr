@@ -1,0 +1,11 @@
+{
+ "DYN_A_Q": 20,
+ "DYN_B_Q": -6,
+ "DYN_C_Q": 167,
+ "DYN_D_Q": -48,
+ "DYN_E_Q": -80,
+ "DYN_P2_Q": -29,
+ "DYN_P3_Q": -178,
+ "rms_db": 0.8769533763797099,
+ "params": "DYN_A_Q=20 DYN_B_Q=-6 DYN_C_Q=167 DYN_D_Q=-48 DYN_E_Q=-80 DYN_P2_Q=-29 DYN_P3_Q=-178"
+}

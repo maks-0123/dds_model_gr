@@ -57,7 +57,20 @@ module dds_gr #(
     parameter integer INL3_Q    = 48,     // 3.0 LSB S-curve
     parameter integer DNL_Q     = 56,     // 3.5 LSB
     parameter integer SEG_BITS  = 6,
-    parameter integer SEED      = 8      // with the defaults: INL -7.9..+5.2 LSB, DNL -3.5..+3.1 LSB
+    parameter integer SEED      = 8,      // with the defaults: INL -7.9..+5.2 LSB, DNL -3.5..+3.1 LSB
+    parameter integer JIT_FS    = 0,      // jitter RMS in fs (1e-15 s)
+    parameter integer SHUF      = 0,      // shuffle parameter
+    // ---- dynamic (slew-dependent) nonlinearity, dac_dyn: e = (A*|dx| + B*dx*x + C*dx*x^2) / 2^16
+    parameter integer DYN_A_Q   = 0,      // edge asymmetry            -> HD2, grows with fOUT
+    parameter integer DYN_B_Q   = 0,      // level-dependent glitch    -> HD2, grows with fOUT
+    parameter integer DYN_C_Q   = 0,      // cubic glitch              -> HD3 / IMD3
+    parameter integer DYN_D_Q   = 0,      // slew^2 charge injection   -> HD2, ~ fOUT^2
+    parameter integer DYN_E_Q   = 0,      // odd slew^2 term           -> HD3 / IMD3, ~ fOUT^2
+    parameter integer DYN_P2_Q  = 0,      // output stage x^2           -> HD2, flat vs fOUT
+    parameter integer DYN_P3_Q  = 0,      // output stage x^3           -> HD3 / IMD3, flat
+    parameter integer NOISE_Q   = 0,      // thermal noise floor, rms in 1/2^FRAC LSB
+    parameter integer FDAC_MHZ  = 12000   // DAC clock, MHz (jitter scaling)
+
 )(
     input         clock,
     input         reset,
@@ -67,7 +80,7 @@ module dds_gr #(
     localparam integer N  = 48;
     localparam integer OW = DW + FRAC;
 
-    // ---------------- frequency control ----------------
+    // frequency control
     localparam [N-1:0] M_CONST = M_CYCLES;
     localparam [N-1:0] SPACING = M_SPACING;
     wire [N-1:0] m_sel = (M_FROM_IO != 0) ? {{(N-16){1'b0}}, io_in[31:16]} : M_CONST;
@@ -76,7 +89,7 @@ module dds_gr #(
 
     localparam [15:0] AM = (TONES == 2) ? AM_2T[15:0] : AM_1T[15:0];
 
-    // ---------------- DDS: tones at RW bits, one rounding to DW ----------------
+    //  DDS: tones at RW bits, one rounding to DW
     wire signed [RW-1:0] t1, t2;
     dds_core #(.N(N), .AW(AW), .RW(RW)) u_t1 (.clk(clock), .rst(reset), .ftw(ftw1), .am(AM), .tone(t1));
     generate
@@ -93,32 +106,43 @@ module dds_gr #(
 
     wire signed [DW-1:0] code = (SRC == 1) ? io_in[DW-1:0] : dds_code;
 
-    // ---------------- DAC ----------------
+    //  DAC
     wire signed [OW-1:0] dac;
+    wire signed [OW-1:0] dyn_dac;
+    wire signed [OW-1:0] jit_dac;
+    wire signed [OW-1:0] out_dac;
+
     generate
         if (NONLIN != 0) begin : g_nl
             dac_nonlin #(.DW(DW), .FRAC(FRAC), .INL2_Q(INL2_Q), .INL3_Q(INL3_Q),
-                         .DNL_Q(DNL_Q), .SEG_BITS(SEG_BITS), .SEED(SEED))
+                        .DNL_Q(DNL_Q), .SEG_BITS(SEG_BITS), .SEED(SEED), .SHUF(SHUF))
                 u_nl (.clk(clock), .din(code), .dout(dac));
+
         end else begin : g_ideal
             reg signed [OW-1:0] r;
             always @(posedge clock) r <= {code, {FRAC{1'b0}}};
             assign dac = r;
         end
     endgenerate
-
+    // dynamic nonlinearity (combinational output: adds no pipeline stage, PIPE/DELAY unchanged)
+    dac_dyn #(.DW(DW), .FRAC(FRAC), .A_Q(DYN_A_Q), .B_Q(DYN_B_Q), .C_Q(DYN_C_Q), .D_Q(DYN_D_Q), .E_Q(DYN_E_Q),
+                .P2_Q(DYN_P2_Q), .P3_Q(DYN_P3_Q))
+                u_dyn (.clk(clock), .din(dac), .dout(dyn_dac));
+    dac_jitter #(.SEED(SEED + 1000), .S(36), .JIT_FS(JIT_FS), .DW(DW), .FRAC(FRAC), .FDAC_MHZ(FDAC_MHZ))
+                u_jit (.clk(clock), .din(dyn_dac), .out(jit_dac));
+    dac_noise  #(.SEED(SEED + 3000), .NOISE_Q(NOISE_Q), .DW(DW), .FRAC(FRAC))
+                u_nse (.clk(clock), .din(jit_dac), .out(out_dac));
     wire signed [OW-1:0] held, filt;
-    deglitch #(OW)    u_dg  (.clk(clock), .strobe(1'b1), .din(dac), .dout(held));
+    deglitch #(OW)    u_dg  (.clk(clock), .strobe(1'b1), .din(out_dac), .dout(held));
     lpf      #(OW, 1) u_lpf (.clk(clock), .rst(reset), .din(held), .dout(filt));
 
-    wire signed [OW-1:0] out_sel = (OUT_SEL == 1) ? filt : dac;
+    wire signed [OW-1:0] out_sel = (OUT_SEL == 1) ? filt : out_dac;
     assign io_out = {{(32-OW){out_sel[OW-1]}}, out_sel};
 endmodule
 
 
-// ---------------------------------------------------------------------------------
 // Static DAC nonlinearity: polynomial INL (bow + S) + unary-segment mismatch (DNL)
-// ---------------------------------------------------------------------------------
+
 module dac_nonlin #(
     parameter integer DW       = 16,
     parameter integer FRAC     = 4,
@@ -126,7 +150,8 @@ module dac_nonlin #(
     parameter integer INL3_Q   = 64,
     parameter integer DNL_Q    = 56,
     parameter integer SEG_BITS = 6,
-    parameter integer SEED     = 1
+    parameter integer SEED     = 1,
+    parameter integer SHUF     = 0
 )(
     input                           clk,
     input  signed [DW-1:0]          din,
@@ -150,25 +175,27 @@ module dac_nonlin #(
     wire signed [47:0] X3 = (X2 * X) >>> H;           // -ONE .. ONE
 
     // polynomial INL, rounded, in 1/2^FRAC LSB
-    wire signed [47:0] E2 = (C2  * (ONE - X2) + HALF) >>> H;
+    wire signed [47:0] E2 = (C2  * (ONE - X2) + HALF) >>> H; //сдвигаем 
     wire signed [47:0] E3 = (C3K * (X3 - X)   + HALF) >>> H;
 
-    // ---- unary segment mismatch table (built once at elaboration / start) ----
     // eseg[s] = sum of weight errors of the s segments that are ON below code segment s
     reg signed [31:0] eseg [0:NSEG];
     integer dk [0:NSEG-1];
     integer k, j, acc, sum, mean, mx, a;
     reg [31:0] lcg;
+    reg [31:0] p;
+
     initial begin
         lcg = SEED;
         sum = 0;
         for (k = 0; k < NSEG; k = k + 1) begin
             acc = 0;
             for (j = 0; j < 12; j = j + 1) begin                  // ~ Gaussian: sum of 12 uniforms
-                lcg = lcg * 32'd1664525 + 32'd1013904223;
+                lcg = lcg * 32'd1664525 + 32'd1013904223;          // псевдослучайный генератор (LCG) так как отрезается от оч большого числа, 32 бита 
                 acc = acc + $signed({20'd0, lcg[31:20]});
             end
-            dk[k] = acc - 12 * 2048;
+            dk[k] = acc - 12 * 2048; // error shifted to zero mean (12*2048 = 24576)
+
             sum   = sum + dk[k];
         end
         mean = sum / NSEG;                                        // truncation toward zero
@@ -188,17 +215,194 @@ module dac_nonlin #(
     // offset-binary code -> number of ON unary segments
     wire [DW-1:0]       ucode = {~din[DW-1], din[DW-2:0]};
     wire [SEG_BITS-1:0] seg   = ucode[DW-1 -: SEG_BITS];
-    wire signed [47:0]  ES    = {{16{eseg[seg][31]}}, eseg[seg]};
+
+    reg [31:0] lcg_r = SEED + 2000;
+    reg [SEG_BITS-1:0] ptr = 0;
+
+    wire [SEG_BITS-1:0] p0 = (SHUF == 1) ? lcg_r[31 -: SEG_BITS] :
+                            (SHUF == 2) ? ptr : {SEG_BITS{1'b0}};
+    
+    wire [SEG_BITS:0] ps = {1'b0, p0} + {1'b0 , seg};
+    wire [SEG_BITS-1:0] q = ps[SEG_BITS-1:0];
+    wire wrap = ps[SEG_BITS];
+
+    wire signed [31:0] ec_q = eseg[q];
+    wire signed [31:0] ec_p = eseg[p0];
+    wire signed [31:0] ec_t = wrap ? eseg[NSEG] :32'sd0; 
+    wire signed [47:0]  ES    =  ec_q - ec_p + ec_t;
+
+    always @(posedge clk) begin 
+        lcg_r <= lcg_r * 32'd1664525 + 32'd1013904223; 
+        if (SHUF == 2) ptr <= q;
+        end 
 
     wire signed [47:0] Y = (X <<< FRAC) + E2 + E3 + ES;
 
-    always @(posedge clk) begin
-        if      (Y > YMAX) dout <= YMAX[OW-1:0];
+    always @(posedge clk) begin 
+        if (Y > YMAX) dout <= YMAX[OW-1:0];
         else if (Y < YMIN) dout <= YMIN[OW-1:0];
-        else               dout <= Y[OW-1:0];
+        else dout <= Y[OW-1:0];
     end
+
 endmodule
 
+// ---------------------------------------------------------------------------------
+// Dynamic (slew-dependent) DAC nonlinearity.          stage 1, AD9081 Table 16
+//
+// The static curve (dac_nonlin) does not depend on frequency, so it cannot explain the
+// SFDR/IMD3 roll-off of Table 16 (80 dBc at 70 MHz -> 68 dBc at 4.5 GHz).  What does roll
+// off is the switching error: every clock the current cells are re-steered, and the charge
+// lost in the transition depends on how far and from which level the output moves.
+//
+//   dx = x[n] - x[n-1]        (one output step; |dx| ~ 2*sin(pi*f/fDAC) * amplitude -> grows with f)
+//   e  = ( A*|dx| + B*dx*xn + C*dx*xn^2 + D*|dx|*dxn + E*dx*|dx|n ) / 2^SH,  xn = x / full scale
+//        A : edge asymmetry (rise != fall).  |dx| of a sine is |sin| -> even harmonics  -> HD2 ~ f
+//        B : level-dependent glitch area.    dx*x = 0.5*d(x^2)/dt               -> HD2 ~ f
+//        C : cubic glitch.                   dx*x^2                             -> HD3, IMD3 ~ f
+//        D : charge injection ~ slew^2.      |dx|^2 = (1-cos2wt)/2              -> HD2 ~ f^2
+//        E : odd slew^2 term.                dx*|dx| (half-wave symmetric)      -> HD3 ~ f^2
+//   plus the memoryless distortion of the analog output stage (not the current cells, so it is
+//   not limited by the INL of Table 3 and shuffling does not touch it):
+//        P2*xn^2 -> HD2, P3*xn^3 -> HD3, both flat in frequency.  They set the low-frequency
+//        corner of Table 16 (80 dBc at 70 MHz), where every slew term has died out.
+//   (the plan wrote only A and B; dx*x is second order and gives no 2f1-f2 product, so the odd
+//    terms C and E are what set IMD3, and the f^2 terms D, E are what give Table 16 its
+//    12 dB SFDR roll-off from 70 MHz to 4.5 GHz - a pure ~f model can only bend by 5.6 dB.
+//    Coefficients are fitted by scripts/fit_dyn.py)
+//
+// The output is combinational (only x[n-1] is registered), so the module adds no pipeline
+// stage and the PIPE/DELAY alignment of the shuffle reference stays valid.
+// ---------------------------------------------------------------------------------
+module dac_dyn #(
+    parameter integer DW   = 16,
+    parameter integer FRAC = 4,
+    parameter integer A_Q  = 0,
+    parameter integer B_Q  = 0,
+    parameter integer C_Q  = 0,
+    parameter integer D_Q  = 0,
+    parameter integer E_Q  = 0,
+    parameter integer P2_Q = 0,
+    parameter integer P3_Q = 0
+)(
+    input                        clk,
+    input  signed [DW+FRAC-1:0]  din,
+    output signed [DW+FRAC-1:0]  dout
+);
+    localparam integer OW = DW + FRAC;
+    localparam integer H  = OW - 1;                 // full scale = 2^H
+    localparam integer SH = 16;                     // coefficient scale: A_Q = 1 -> |dx|/2^16
+    localparam signed [63:0] RND  = 64'sd1 <<< (SH - 1);
+    localparam signed [63:0] YMAX =  (64'sd1 <<< H) - 1;
+    localparam signed [63:0] YMIN = -(64'sd1 <<< H);
+
+    reg signed [OW-1:0] prev = {OW{1'b0}};
+    always @(posedge clk) prev <= din;
+
+    wire signed [63:0] X  = {{(64-OW){din[OW-1]}},  din};
+    wire signed [63:0] XP = {{(64-OW){prev[OW-1]}}, prev};
+    wire signed [63:0] D  = X - XP;
+    wire signed [63:0] AD = (D < 0) ? -D : D;
+
+    wire signed [63:0] DX  = (D  * X)  >>> H;       // dx * xn
+    wire signed [63:0] DX2 = (DX * X)  >>> H;       // dx * xn^2
+    wire signed [63:0] AA  = (AD * AD) >>> H;       // |dx| * |dx|n
+    wire signed [63:0] DA  = (D  * AD) >>> H;       // dx  * |dx|n
+    wire signed [63:0] XX  = (X  * X)  >>> H;       // xn^2 * full scale
+    wire signed [63:0] XXX = (XX * X)  >>> H;       // xn^3 * full scale
+
+    wire signed [63:0] E = (A_Q * AD + B_Q * DX + C_Q * DX2
+                            + D_Q * AA + E_Q * DA
+                            + P2_Q * XX + P3_Q * XXX + RND) >>> SH;
+    wire signed [63:0] Y = X + E;
+    assign dout = (Y > YMAX) ? YMAX[OW-1:0] : (Y < YMIN) ? YMIN[OW-1:0] : Y[OW-1:0];
+endmodule
+
+
+module dac_jitter #(
+    parameter integer SEED     = 1,
+    parameter integer S        = 36,
+    parameter integer JIT_FS   = 50 ,
+    parameter integer DW       = 16,
+    parameter integer FRAC     = 4,
+    parameter integer FDAC_MHZ = 12000
+)(
+    input clk, 
+    input signed [DW+FRAC-1:0] din,
+
+    output reg signed [DW+FRAC-1:0] out
+);  
+    localparam integer OW = DW + FRAC;
+    localparam signed [63:0] YMAX =  (64'sd1 <<< (OW - 1)) - 1;
+    localparam signed [63:0] YMIN = -(64'sd1 <<< (OW - 1));
+
+    reg signed [DW+FRAC-1:0] dac_prev;
+    reg [31:0] lcg;
+    reg signed [DW+FRAC:0] dx;
+    integer j, err_o;
+    localparam real  SIG_TS = JIT_FS * 1.0e-15 * (FDAC_MHZ * 1.0e6);
+    localparam signed [63:0] KJ = $rtoi(SIG_TS /4096.0 * (2.0 ** S));
+
+    reg signed [63:0] err, y;
+
+    initial begin lcg = SEED; dac_prev = 0; out = 0;
+    end
+
+    always @(posedge clk) begin
+        err_o = 0;
+        for (j = 0; j < 12; j = j + 1) begin                  // ~ Gaussian: sum of 12 uniforms
+            lcg = lcg * 32'd1664525 + 32'd1013904223;          // псевдослучайный генератор (LCG) так как отрезается от оч большого числа, 32 бита 
+            err_o = err_o + $signed({20'd0, lcg[31:20]});
+        end
+        err_o = err_o - 12 * 2048;
+        dx = din - dac_prev;
+        err = (dx * KJ * err_o) >>> S;
+        y   = din - err;
+        if      (y > YMAX) out <= YMAX[OW-1:0];               // saturate instead of wrapping
+        else if (y < YMIN) out <= YMIN[OW-1:0];
+        else               out <= y[OW-1:0];
+        dac_prev <= din;  
+
+        end
+endmodule
+
+// ---------------------------------------------------------------------------------
+// Thermal noise floor of the DAC output stage: white Gaussian, rms = NOISE_Q in 1/2^FRAC LSB.
+// NOISE_Q = 115 -> -168 dBc/Hz at 0 dBFS, fDAC = 12 GSPS (AD9081 Table 16 NSD at low fOUT).
+// ---------------------------------------------------------------------------------
+module dac_noise #(
+    parameter integer SEED    = 1,
+    parameter integer NOISE_Q = 0,
+    parameter integer DW      = 16,
+    parameter integer FRAC    = 4
+)(
+    input clk,
+    input signed [DW+FRAC-1:0] din,
+    output signed [DW+FRAC-1:0] out
+);
+    localparam integer OW = DW + FRAC;
+    localparam signed [63:0] YMAX =  (64'sd1 <<< (OW - 1)) - 1;
+    localparam signed [63:0] YMIN = -(64'sd1 <<< (OW - 1));
+
+    // combinational output (only the generator state is registered): no extra pipeline stage
+    reg  [31:0] lcg = SEED;
+    integer j;
+    reg signed [63:0] acc;
+    reg  [31:0] nxt;
+    always @(*) begin                                  // 12 fresh uniforms -> ~Gaussian, sigma = 4096
+        acc = 0;
+        nxt = lcg;
+        for (j = 0; j < 12; j = j + 1) begin
+            nxt = nxt * 32'd1664525 + 32'd1013904223;
+            acc = acc + $signed({20'd0, nxt[31:20]});
+        end
+        acc = acc - 12 * 2048;
+    end
+    always @(posedge clk) lcg <= nxt;                  // the next sample uses 12 new values
+
+    wire signed [63:0] X = {{(64-OW){din[OW-1]}}, din};
+    wire signed [63:0] Y = (NOISE_Q == 0) ? X : X + ((acc * NOISE_Q) >>> 12);
+    assign out = (Y > YMAX) ? YMAX[OW-1:0] : (Y < YMIN) ? YMIN[OW-1:0] : Y[OW-1:0];
+endmodule
 
 // ---------------------------------------------------------------------------------
 // Phase accumulator + sine ROM + amplitude, output at RW bits (no rounding here)
@@ -262,7 +466,7 @@ module sine_mem #(parameter integer AW = 16, DW = 20) (
         pi = 3.14159265358979323846;
         for (i = 0; i < (1<<AW); i = i + 1) begin
             v = $sin(2.0*pi*i/(1<<AW)) * ((1<<(DW-1)) - 1);
-            r = $rtoi($floor(v + 0.5));
+            r = $rtoi($floor(v + 0.5));                                 //округление ошибка
             rom[i] = r[DW-1:0];
         end
     end
@@ -288,7 +492,7 @@ module lpf #(parameter integer DW = 20, K = 1) (
     output signed [DW-1:0] dout
 );
     reg signed [DW+K-1:0] acc;
-    assign dout = acc[DW+K-1:K];
+    assign dout = acc[DW+K-1:K];                            //отбрасиваем K младших битов
     wire signed [DW+K-1:0] din_x  = {{K{din[DW-1]}},  din};
     wire signed [DW+K-1:0] dout_x = {{K{dout[DW-1]}}, dout};
     always @(posedge clk)
